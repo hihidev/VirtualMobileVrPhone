@@ -13,7 +13,6 @@ import java.util.concurrent.CountDownLatch;
 
 public class TcpServer implements MirrorServerInterface {
 
-    private static final String TAG = "TcpServer";
     private static final boolean DEBUG = true;
 
     private boolean isConnected = false;
@@ -24,16 +23,22 @@ public class TcpServer implements MirrorServerInterface {
     private Queue<Packet> mPendingPacketQueue = new ConcurrentLinkedQueue<>();
 
     @Override
-    public void start(final InetSocketAddress address) {
+    public void start(final String debutTag, final InetSocketAddress address) {
+        start(debutTag, address, null);
+    }
+
+    @Override
+    public void start(final String debugTag, final InetSocketAddress address, final Runnable stoppedCallback) {
         isRunning = true;
         // Better way to handling threading?
         new Thread() {
             public void run() {
                 try (ServerSocket serverSocket = new ServerSocket(address.getPort())) {
+                    serverSocket.setReuseAddress(true);
                     while (isRunning) {
-                        Log.i(TAG, "Server is listening on port " + address.getPort());
+                        Log.i(debugTag, "Server is listening on port " + address.getPort());
                         final Socket socket = serverSocket.accept();
-                        Log.i(TAG, "Client connected");
+                        Log.i(debugTag, "Client connected");
 
                         // TODO: Identity verification !!!
                         // TODO: Encrypt the content !!!
@@ -50,7 +55,7 @@ public class TcpServer implements MirrorServerInterface {
                                     continue;
                                 }
                                 if (DEBUG) {
-                                    Log.i(TAG, "Ready to send, pending size: " + mPendingPacketQueue.size());
+                                    Log.i(debugTag, "Ready to send, pending size: " + mPendingPacketQueue.size());
                                 }
                                 Packet packet = mPendingPacketQueue.poll();
 
@@ -71,14 +76,17 @@ public class TcpServer implements MirrorServerInterface {
                             } catch (IOException e) {
                             }
                         }
-                        Log.i(TAG, "Client disconnected");
+                        Log.i(debugTag, "Client disconnected");
                         isConnected = false;
                     }
                 } catch (IOException ex) {
-                    Log.e(TAG, "Server exception: " + ex.getMessage());
+                    Log.e(debugTag, "Server exception: " + ex.getMessage());
                     ex.printStackTrace();
                 } finally {
                     mStoppingLock.countDown();
+                    if (stoppedCallback != null) {
+                        stoppedCallback.run();
+                    }
                 }
             }
         }.start();
@@ -86,7 +94,6 @@ public class TcpServer implements MirrorServerInterface {
 
     @Override
     public void stop() {
-        Log.i(TAG, "Stopping server");
         isRunning = false;
     }
 
@@ -94,7 +101,7 @@ public class TcpServer implements MirrorServerInterface {
     public void sendBuf(byte[] buf, int len) {
         // TODO: Better buf limit ?
         if (mPendingPacketQueue.size() >= 200) {
-            Log.w(TAG, "Buffer full, mPendingPacketQueue size: " + mPendingPacketQueue.size());
+            Log.w("TcpServer", "Buffer full, mPendingPacketQueue size: " + mPendingPacketQueue.size());
             return;
         }
         // TODO: need extra copy?
