@@ -4,12 +4,15 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
@@ -29,6 +32,10 @@ public class MainActivity extends AppCompatActivity {
                 if (!audioPermissionGranted()) {
                     requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},
                             AUDIO_RECORD_REQUEST_CODE);
+                } else if (!isAccessibilityServiceEnabled(MainActivity.this, MirrorService.class)) {
+                    Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
                 } else if (MirrorService.isRunning()) {
                     startService(false, 0, null);
                     MirrorService.setRunning(false);
@@ -38,6 +45,29 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    private static boolean isAccessibilityServiceEnabled(Context context, Class<?> accessibilityService) {
+        ComponentName expectedComponentName = new ComponentName(context, accessibilityService);
+
+        String enabledServicesSetting = Settings.Secure.getString(context.getContentResolver(),  Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if (enabledServicesSetting == null) {
+            return false;
+        }
+
+        TextUtils.SimpleStringSplitter colonSplitter = new TextUtils.SimpleStringSplitter(':');
+        colonSplitter.setString(enabledServicesSetting);
+
+        while (colonSplitter.hasNext()) {
+            String componentNameString = colonSplitter.next();
+            ComponentName enabledService = ComponentName.unflattenFromString(componentNameString);
+
+            if (enabledService != null && enabledService.equals(expectedComponentName)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void startProjection() {

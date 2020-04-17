@@ -1,5 +1,6 @@
 package dev.hihi.virtualmobilevrphone;
 
+import android.accessibilityservice.AccessibilityService;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -13,6 +14,7 @@ import android.os.IBinder;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.WindowManager;
+import android.view.accessibility.AccessibilityEvent;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
@@ -20,28 +22,35 @@ import androidx.core.app.NotificationCompat;
 
 import java.net.InetSocketAddress;
 
-public class MirrorService extends Service {
+public class MirrorService extends AccessibilityService {
 
     private static final String TAG = "MirrorService";
 
     public static final int VIDEO_PORT = 1234;
     public static final int AUDIO_PORT = 1235;
+    public static final int COMMAND_PORT = 1236;
 
     private MediaProjection mMediaProjection;
 
     private MirrorServerInterface mAudioServer;
     private MirrorServerInterface mVideoServer;
+    private MirrorServerInterface mCommandServer;
 
     private AudioEncoder mAudioEncoder;
     private VideoEncoder mVideoEncoder;
+    private CommandService mCommandService;
 
     // TODO: Fix it
     private static boolean sIsRunning = false;
 
-    @Nullable
     @Override
-    public IBinder onBind(Intent intent) {
-        return null;
+    public void onAccessibilityEvent(AccessibilityEvent accessibilityEvent) {
+
+    }
+
+    @Override
+    public void onInterrupt() {
+
     }
 
     private void createNotificationChannel() {
@@ -103,6 +112,7 @@ public class MirrorService extends Service {
                     Log.w(TAG, "Cannot support audio streaming");
                 }
                 startVideoStreaming();
+                startCommandService();
                 break;
             case "stop":
                 sIsRunning = false;
@@ -121,6 +131,14 @@ public class MirrorService extends Service {
                 MirrorServerInterface videoServer = mVideoServer;
                 if (videoServer != null) {
                     videoServer.stop();
+                }
+                CommandService commandService = mCommandService;
+                if (commandService != null) {
+                    commandService.stop();
+                }
+                MirrorServerInterface commandServer = mCommandServer;
+                if (commandServer != null) {
+                    commandServer.stop();
                 }
                 break;
             default:
@@ -190,7 +208,7 @@ public class MirrorService extends Service {
                                 encoder.stop();
                             }
                         }
-                    });
+                    }, false);
                     Log.i(TAG, "Start video stream");
                     mVideoEncoder.start(mMediaProjection, width, height, density, mVideoServer);
                     Log.i(TAG, "VideoEncoder stopped, stopping Video TCP server");
@@ -201,6 +219,26 @@ public class MirrorService extends Service {
                     mVideoServer = null;
                     mVideoEncoder = null;
                 }
+            }
+        }.start();
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void startCommandService() {
+        new Thread () {
+            public void run() {
+                mCommandService = new CommandService(MirrorService.this);
+                InetSocketAddress inetSockAddress = new InetSocketAddress(COMMAND_PORT);
+                mCommandServer = new TcpServer();
+                mCommandServer.start("CommandServer", inetSockAddress, null, true);
+                mCommandService.start(mCommandServer);
+                mCommandService.waitUntilStopped();
+                Log.i(TAG, "Command service stopped, stopping Command TCP server");
+                mCommandServer.stop();
+                mCommandServer.waitUntilStopped();
+                Log.i(TAG, "Command TCP server stopped");
+                mCommandService = null;
+                mCommandServer = null;
             }
         }.start();
     }
