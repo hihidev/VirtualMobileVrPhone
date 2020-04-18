@@ -9,10 +9,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.projection.MediaProjectionManager;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.text.format.Formatter;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
@@ -113,6 +115,14 @@ public class MainActivity extends AppCompatActivity {
         } else {
             updateButtonText("Start server");
         }
+        TextView ipTextView = findViewById(R.id.ip_textview);
+        ipTextView.setText("IP: " + getWifiIpAddress());
+    }
+
+    private String getWifiIpAddress() {
+        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        String ip = Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
+        return ip;
     }
 
     private void updateButtonText(String text) {
