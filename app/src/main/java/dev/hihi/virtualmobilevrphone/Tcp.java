@@ -6,59 +6,89 @@ import android.util.Log;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 
-public class TcpServer implements MirrorServerInterface {
+public class Tcp implements MirrorServerInterface {
 
     private static final boolean DEBUG = true;
 
-    private boolean mIsConnected = false;
-    private boolean mIsRunning = false;
+    volatile private boolean mIsConnected = false;
+    volatile private boolean mIsRunning = false;
+    volatile  ServerSocket mServerSocket;
+
+    private final boolean mIsServer;
+    private final String mTag;
 
     private CountDownLatch mStoppingLock = new CountDownLatch(1);
 
     private Queue<Packet> mPendingPacketQueue = new ConcurrentLinkedQueue<>();
 
-    @Override
-    public void start(final String debutTag, final InetSocketAddress address) {
-        start(debutTag, address, null, false);
+    public Tcp(String tag, boolean isServer) {
+        mTag = tag;
+        mIsServer = isServer;
     }
 
     @Override
-    public void start(final String debugTag, final InetSocketAddress address, final Runnable stoppedCallback, final boolean receiveMode) {
+    public void start(final String ip, final int port, final Runnable stoppedCallback, final boolean receiveMode) {
+        Log.i(mTag, "Start()");
         mIsRunning = true;
         // Better way to handling threading?
         new Thread() {
             public void run() {
-                try (ServerSocket serverSocket = new ServerSocket(address.getPort())) {
-                    serverSocket.setReuseAddress(true);
-                    while (mIsRunning) {
-                        Log.i(debugTag, "Server is listening on port " + address.getPort());
-                        final Socket socket = serverSocket.accept();
-                        Log.i(debugTag, "Client connected");
-
-                        // TODO: Identity verification !!!
-                        // TODO: Encrypt the content !!!
-                        mPendingPacketQueue.clear();
-                        mIsConnected = true;
-
-                        if (receiveMode) {
-                            recvModeLoop(debugTag, socket);
-                        } else {
-                            sendModeLoop(debugTag, socket);
-                        }
-                        Log.i(debugTag, "Client disconnected");
-                        mIsConnected = false;
+                Socket socket = null;
+                try {
+                    if (mIsServer) {
+                        mServerSocket = new ServerSocket(port);
+                        mServerSocket.setReuseAddress(true);
+                        socket = mServerSocket.accept();
+                    } else {
+                        socket = new Socket(ip, port);
                     }
+                    if (socket == null || !mIsRunning) {
+                        return;
+                    }
+
+                    mPendingPacketQueue.clear();
+                    mIsConnected = true;
+
+                    final Socket s = socket;
+                    if (receiveMode) {
+                        new Thread() {
+                            public void run() {
+                                sendPingLoop(s);
+                            }
+                        }.start();
+                        recvModeLoop(s);
+                    } else {
+                        new Thread() {
+                            public void run() {
+                                recvPingLoop(s);
+                            }
+                        }.start();
+                        sendModeLoop(s);
+                    }
+                    Log.i(mTag, "Client disconnected");
+                    mIsConnected = false;
                 } catch (IOException ex) {
-                    Log.e(debugTag, "Server exception: " + ex.getMessage());
+                    Log.e(mTag, "Server exception: " + ex.getMessage());
                     ex.printStackTrace();
                 } finally {
+                    mIsConnected = false;
+                    try {
+                        if (mServerSocket != null) {
+                            mServerSocket.close();
+                        }
+                    } catch (Exception e){}
+                    try {
+                        if (socket != null) {
+                            socket.close();
+                        }
+                    } catch (Exception e){}
+
                     mStoppingLock.countDown();
                     if (stoppedCallback != null) {
                         stoppedCallback.run();
@@ -68,7 +98,7 @@ public class TcpServer implements MirrorServerInterface {
         }.start();
     }
 
-    private void sendModeLoop(final String debugTag, final Socket socket) {
+    private void sendModeLoop(final Socket socket) {
         try (OutputStream os = socket.getOutputStream()) {
             while (mIsRunning) {
                 // TODO: Better busy waiting?
@@ -79,7 +109,7 @@ public class TcpServer implements MirrorServerInterface {
                     continue;
                 }
                 if (DEBUG) {
-                    Log.i(debugTag, "Ready to send, pending size: " + mPendingPacketQueue.size());
+                    Log.i(mTag, "Ready to send, pending size: " + mPendingPacketQueue.size());
                 }
                 Packet packet = mPendingPacketQueue.poll();
 
@@ -104,11 +134,47 @@ public class TcpServer implements MirrorServerInterface {
         }
     }
 
-    private void recvModeLoop(final String debugTag, final Socket socket) {
+    private void sendPingLoop(final Socket socket) {
+        try (OutputStream os = socket.getOutputStream()) {
+            while (mIsRunning) {
+                SystemClock.sleep(500);
+                os.write(0);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+    private void recvPingLoop(final Socket socket) {
+        try (InputStream is = socket.getInputStream()) {
+            while (mIsRunning) {
+                if (is.read() < 0) {
+                    return;
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void recvModeLoop(final Socket socket) {
         try (InputStream is = socket.getInputStream()) {
             while (mIsRunning) {
                 byte[] header = new byte[4];
-                Log.i(debugTag, "isRunning: " + mIsRunning);
+                Log.i(mTag, "isRunning: " + mIsRunning);
                 while (mIsRunning) {
                     int headerRemain = 4;
                     int headerOffset = 0;
@@ -116,7 +182,7 @@ public class TcpServer implements MirrorServerInterface {
                         if (!mIsRunning) {
                             return;
                         }
-                        if (is.available() == 0) {
+                        if (is.available() == 0 && !socket.isClosed() && socket.isConnected()) {
                             SystemClock.sleep(1);
                             continue;
                         }
@@ -138,8 +204,9 @@ public class TcpServer implements MirrorServerInterface {
                         if (!mIsRunning) {
                             return;
                         }
-                        if (is.available() == 0) {
+                        if (is.available() == 0 && !socket.isClosed() && socket.isConnected()) {
                             SystemClock.sleep(1);
+                            Log.i(mTag, "143");
                             continue;
                         }
                         int size = is.read(buffer, nextPacketOffset, nextPacketSize);
@@ -156,6 +223,7 @@ public class TcpServer implements MirrorServerInterface {
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
+            Log.w(mTag, "Stopped..");
             try {
                 socket.close();
             } catch (IOException e) {
@@ -166,13 +234,20 @@ public class TcpServer implements MirrorServerInterface {
     @Override
     public void stop() {
         mIsRunning = false;
+        if (mServerSocket != null) {
+            try {
+                mServerSocket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @Override
     public void sendBuf(byte[] buf, int len) {
         // TODO: Better buf limit ?
         if (mPendingPacketQueue.size() >= 200) {
-            Log.w("TcpServer", "Buffer full, mPendingPacketQueue size: " + mPendingPacketQueue.size());
+            Log.w(mTag, "Buffer full, mPendingPacketQueue size: " + mPendingPacketQueue.size());
             return;
         }
         // TODO: need extra copy?

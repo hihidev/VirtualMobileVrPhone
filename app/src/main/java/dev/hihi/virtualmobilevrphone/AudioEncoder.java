@@ -25,47 +25,51 @@ public class AudioEncoder {
 
     // TODO: Encode audio, do not just stream PCM directly
     @RequiresApi(api = Build.VERSION_CODES.Q)
-    public void streamAudio(MediaProjection mediaProjection, MirrorServerInterface server) {
+    public void streamAudio(final MediaProjection mediaProjection, final MirrorServerInterface server) {
 
-        AudioPlaybackCaptureConfiguration config = new AudioPlaybackCaptureConfiguration.Builder(
-                mediaProjection)
-                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-                .addMatchingUsage(AudioAttributes.USAGE_GAME)
-                .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
-                .build();
-        AudioFormat audioFormat = new AudioFormat.Builder()
-                .setEncoding(ENCODING)
-                .setSampleRate(SAMPLE_RATE)
-                .setChannelMask(CHANNEL_MASK)
-                .build();
-        AudioRecord audioRecord = new AudioRecord.Builder()
-                .setAudioFormat(audioFormat)
-                .setBufferSizeInBytes(BUFFER_SIZE)
-                .setAudioPlaybackCaptureConfig(config)
-                .build();
+        new Thread () {
+            public void run() {
+                AudioPlaybackCaptureConfiguration config = new AudioPlaybackCaptureConfiguration.Builder(
+                        mediaProjection)
+                        .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                        .addMatchingUsage(AudioAttributes.USAGE_GAME)
+                        .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+                        .build();
+                AudioFormat audioFormat = new AudioFormat.Builder()
+                        .setEncoding(ENCODING)
+                        .setSampleRate(SAMPLE_RATE)
+                        .setChannelMask(CHANNEL_MASK)
+                        .build();
+                AudioRecord audioRecord = new AudioRecord.Builder()
+                        .setAudioFormat(audioFormat)
+                        .setBufferSizeInBytes(BUFFER_SIZE)
+                        .setAudioPlaybackCaptureConfig(config)
+                        .build();
 
-        try {
-            byte[] buffer = new byte[BUFFER_SIZE];
-            isRunning = true;
+                try {
+                    byte[] buffer = new byte[BUFFER_SIZE];
+                    isRunning = true;
 
-            audioRecord.startRecording();
-            while (isRunning) {
-                int read = audioRecord.read(buffer, 0, buffer.length);
-                server.sendBuf(buffer, read);
-            }
-        } finally {
-            try {
-                if (audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
-                    audioRecord.stop();
+                    audioRecord.startRecording();
+                    while (isRunning) {
+                        int read = audioRecord.read(buffer, 0, buffer.length);
+                        server.sendBuf(buffer, read);
+                    }
+                } finally {
+                    try {
+                        if (audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+                            audioRecord.stop();
+                        }
+                    } catch (IllegalStateException e) {
+                        e.printStackTrace();
+                    }
+                    if (audioRecord.getState() == AudioRecord.STATE_INITIALIZED) {
+                        audioRecord.release();
+                    }
+                    mCountDownLatch.countDown();
                 }
-            } catch (IllegalStateException e) {
-                e.printStackTrace();
             }
-            if (audioRecord.getState() == AudioRecord.STATE_INITIALIZED) {
-                audioRecord.release();
-            }
-            mCountDownLatch.countDown();
-        }
+        }.start();
     }
 
     public void stop() {

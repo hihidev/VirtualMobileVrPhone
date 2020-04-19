@@ -112,7 +112,9 @@ public class MirrorService extends AccessibilityService {
                     Log.w(TAG, "Cannot support audio streaming");
                 }
                 startVideoStreaming();
-                startCommandService();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startCommandService();
+                }
                 break;
             case "stop":
                 sIsRunning = false;
@@ -149,24 +151,32 @@ public class MirrorService extends AccessibilityService {
 
     @RequiresApi(api = Build.VERSION_CODES.Q)
     private void startAudioStreaming() {
-
         Log.i(TAG, "startAudioStreaming");
-
         // TODO: Better thread handling?
         new Thread () {
             public void run() {
-                mAudioEncoder = new AudioEncoder();
-                InetSocketAddress inetSockAddress = new InetSocketAddress(AUDIO_PORT);
-                mAudioServer = new TcpServer();
-                mAudioServer.start("AudioServer", inetSockAddress);
-                mAudioEncoder.streamAudio(mMediaProjection, mAudioServer);
-                mAudioEncoder.waitUntilStopped();
-                Log.i(TAG, "AudioEncoder stopped, stopping Audio TCP server");
-                mAudioServer.stop();
-                mAudioServer.waitUntilStopped();
-                Log.i(TAG, "Audio TCP server stopped");
-                mAudioEncoder = null;
-                mAudioServer = null;
+                while (sIsRunning) {
+                    Log.i(TAG, "startAudioStreaming run()");
+                    mAudioEncoder = new AudioEncoder();
+                    mAudioServer = new Tcp("AudioServer", true);
+                    mAudioServer.start(null, AUDIO_PORT, null, false);
+
+                    Log.i(TAG, "Start audio streaming");
+                    mAudioEncoder.streamAudio(mMediaProjection, mAudioServer);
+                    // Wait for client disconnect
+                    mAudioServer.waitUntilStopped();
+
+                    Log.i(TAG, "Audio client disconnected, stopping all audio components");
+                    mAudioServer.stop();
+                    mAudioEncoder.stop();
+
+                    mAudioServer.waitUntilStopped();
+                    mAudioEncoder.waitUntilStopped();
+
+                    Log.i(TAG, "All audio components stopped");
+                    mAudioEncoder = null;
+                    mAudioServer = null;
+                }
             }
         }.start();
     }
@@ -186,36 +196,40 @@ public class MirrorService extends AccessibilityService {
                     final int width = metrics.widthPixels;
 
                     mVideoEncoder = new VideoEncoder();
+                    mVideoServer = new Tcp("VideoServer", true);
+                    final VideoEncoder videoEncoder = mVideoEncoder;
+                    final MirrorServerInterface server = mVideoServer;
+
                     final RotationListener rotationListener = new RotationListener();
                     rotationListener.startListener(getApplicationContext(),
                             new RotationListener.RotationChangeInterface() {
                                 @Override
                                 public void onRotationChanged(int rotation) {
                                     rotationListener.stopListener();
-                                    VideoEncoder encoder = mVideoEncoder;
-                                    if (encoder != null) {
-                                        encoder.stop();
-                                    }
+                                    // Orientation changed, disconnect client to restart
+                                    server.stop();
                                 }
                             });
-                    InetSocketAddress inetSockAddress = new InetSocketAddress(VIDEO_PORT);
-                    mVideoServer = new TcpServer();
-                    mVideoServer.start("VideoServer", inetSockAddress, new Runnable() {
+                    mVideoServer.start(null, VIDEO_PORT, new Runnable() {
                         @Override
                         public void run() {
-                            VideoEncoder encoder = mVideoEncoder;
-                            if (encoder != null) {
-                                encoder.stop();
-                            }
+                            // If client disconnected, stop video encoder too.
+                            videoEncoder.stop();
                         }
                     }, false);
-                    Log.i(TAG, "Start video stream");
+
+                    Log.i(TAG, "Start video streaming");
                     mVideoEncoder.start(mMediaProjection, width, height, density, mVideoServer);
-                    Log.i(TAG, "VideoEncoder stopped, stopping Video TCP server");
+
+                    Log.i(TAG, "VideoEncoder stopped, stopping all video components");
                     rotationListener.stopListener();
+                    mVideoEncoder.stop();
                     mVideoServer.stop();
+
+                    // mVideoEncoder.waitUntilStopped();
                     mVideoServer.waitUntilStopped();
-                    Log.i(TAG, "Video TCP server stopped");
+
+                    Log.i(TAG, "All videos component stopped");
                     mVideoServer = null;
                     mVideoEncoder = null;
                 }
@@ -227,18 +241,27 @@ public class MirrorService extends AccessibilityService {
     private void startCommandService() {
         new Thread () {
             public void run() {
-                mCommandService = new CommandService(MirrorService.this);
-                InetSocketAddress inetSockAddress = new InetSocketAddress(COMMAND_PORT);
-                mCommandServer = new TcpServer();
-                mCommandServer.start("CommandServer", inetSockAddress, null, true);
-                mCommandService.start(mCommandServer);
-                mCommandService.waitUntilStopped();
-                Log.i(TAG, "Command service stopped, stopping Command TCP server");
-                mCommandServer.stop();
-                mCommandServer.waitUntilStopped();
-                Log.i(TAG, "Command TCP server stopped");
-                mCommandService = null;
-                mCommandServer = null;
+                while (sIsRunning) {
+                    mCommandService = new CommandService(MirrorService.this);
+                    mCommandServer = new Tcp("CommandServer", true);
+
+                    mCommandServer.start(null, COMMAND_PORT, null, true);
+                    mCommandService.start(mCommandServer);
+
+                    Log.i(TAG, "Command server started");
+                    mCommandServer.waitUntilStopped();
+
+                    Log.i(TAG, "Command server stopped, stopping Command service");
+                    mCommandService.stop();
+                    mCommandServer.stop();
+
+                    mCommandService.waitUntilStopped();
+                    mCommandServer.waitUntilStopped();
+
+                    Log.i(TAG, "Command service stopped");
+                    mCommandService = null;
+                    mCommandServer = null;
+                }
             }
         }.start();
     }
