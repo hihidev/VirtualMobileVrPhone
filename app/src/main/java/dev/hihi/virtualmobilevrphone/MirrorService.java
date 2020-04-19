@@ -4,23 +4,18 @@ import android.accessibilityservice.AccessibilityService;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
-import android.os.IBinder;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 
-import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
-
-import java.net.InetSocketAddress;
 
 public class MirrorService extends AccessibilityService {
 
@@ -159,7 +154,7 @@ public class MirrorService extends AccessibilityService {
                     Log.i(TAG, "startAudioStreaming run()");
                     mAudioEncoder = new AudioEncoder();
                     mAudioServer = new Tcp("AudioServer", true);
-                    mAudioServer.start(null, AUDIO_PORT, null, false);
+                    mAudioServer.start(null, AUDIO_PORT, null, null, false);
 
                     Log.i(TAG, "Start audio streaming");
                     mAudioEncoder.streamAudio(mMediaProjection, mAudioServer);
@@ -213,6 +208,11 @@ public class MirrorService extends AccessibilityService {
                     mVideoServer.start(null, VIDEO_PORT, new Runnable() {
                         @Override
                         public void run() {
+                            videoEncoder.onClientConnected();
+                        }
+                    }, new Runnable() {
+                        @Override
+                        public void run() {
                             // If client disconnected, stop video encoder too.
                             videoEncoder.stop();
                         }
@@ -245,7 +245,7 @@ public class MirrorService extends AccessibilityService {
                     mCommandService = new CommandService(MirrorService.this);
                     mCommandServer = new Tcp("CommandServer", true);
 
-                    mCommandServer.start(null, COMMAND_PORT, null, true);
+                    mCommandServer.start(null, COMMAND_PORT, null, null, true);
                     mCommandService.start(mCommandServer);
 
                     Log.i(TAG, "Command server started");

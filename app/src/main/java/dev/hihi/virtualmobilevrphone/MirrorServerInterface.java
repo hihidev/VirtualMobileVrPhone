@@ -3,7 +3,8 @@ package dev.hihi.virtualmobilevrphone;
 import java.net.InetSocketAddress;
 
 public interface MirrorServerInterface {
-    void start(String ip, int port, Runnable stoppedCallback, boolean receiveMode);
+    void start(final String ip, final int port, final Runnable connectedCallback,
+            final Runnable stoppedCallback, final boolean receiveMode);
     void stop();
     void sendBuf(byte[] buf, int len);
     boolean isConnected();

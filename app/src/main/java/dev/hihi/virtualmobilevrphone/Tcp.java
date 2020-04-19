@@ -33,7 +33,8 @@ public class Tcp implements MirrorServerInterface {
     }
 
     @Override
-    public void start(final String ip, final int port, final Runnable stoppedCallback, final boolean receiveMode) {
+    public void start(final String ip, final int port, final Runnable connectedCallback,
+            final Runnable stoppedCallback, final boolean receiveMode) {
         Log.i(mTag, "Start()");
         mIsRunning = true;
         // Better way to handling threading?
@@ -54,6 +55,10 @@ public class Tcp implements MirrorServerInterface {
 
                     mPendingPacketQueue.clear();
                     mIsConnected = true;
+
+                    if (connectedCallback != null) {
+                        connectedCallback.run();
+                    }
 
                     final Socket s = socket;
                     if (receiveMode) {
@@ -139,6 +144,7 @@ public class Tcp implements MirrorServerInterface {
             while (mIsRunning) {
                 SystemClock.sleep(500);
                 os.write(0);
+                Log.w(mTag, "sendPingLoop");
             }
         } catch (IOException e) {
             e.printStackTrace();

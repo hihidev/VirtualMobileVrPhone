@@ -7,6 +7,7 @@ import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.media.projection.MediaProjection;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Surface;
 
@@ -34,12 +35,20 @@ public class VideoEncoder {
     private int height;
 
     private boolean isStopped = false;
+    volatile private boolean mClientConnected = false;
 
     public void start(MediaProjection mediaProjection, int width, int height, int density,
             MirrorServerInterface server) {
 
         this.width = width;
         this.height = height;
+
+        while (!mClientConnected && !isStopped) {
+            SystemClock.sleep(50);
+        }
+        if (isStopped) {
+            return;
+        }
 
         MediaFormat format = createFormat(width, height);
         try {
@@ -85,6 +94,7 @@ public class VideoEncoder {
     }
 
     private boolean encode(MediaCodec codec, final MirrorServerInterface server) {
+        Log.i(TAG, "encode()");
         boolean eof = false;
         boolean needToSendSps = true;
 
@@ -94,6 +104,7 @@ public class VideoEncoder {
         while (!eof && !isStopped) {
             int outputBufferId = codec.dequeueOutputBuffer(bufferInfo, 100_000);
             eof = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
+
             try {
                 if (outputBufferId >= 0) {
                     ByteBuffer codecBuffer = codec.getOutputBuffer(outputBufferId);
@@ -171,5 +182,9 @@ public class VideoEncoder {
             buf.append(Integer.toHexString(bytes[i] & 0xff)).append(" ");
         }
         Log.i(TAG, "tag: " + tag + ", bytes: " + buf);
+    }
+
+    public void onClientConnected() {
+        mClientConnected = true;
     }
 }
