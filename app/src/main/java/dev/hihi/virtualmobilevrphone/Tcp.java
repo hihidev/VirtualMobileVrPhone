@@ -114,7 +114,7 @@ public class Tcp implements MirrorServerInterface {
                     continue;
                 }
                 if (DEBUG) {
-                    Log.i(mTag, "Ready to send, pending size: " + mPendingPacketQueue.size());
+                    debugLog(mTag, "Ready to send, pending size: " + mPendingPacketQueue.size());
                 }
                 Packet packet = mPendingPacketQueue.poll();
 
@@ -124,6 +124,7 @@ public class Tcp implements MirrorServerInterface {
                 header[1] =  (byte) ((packet.size >> 16) & 0xff);
                 header[2] =  (byte) ((packet.size >> 8) & 0xff);
                 header[3] =  (byte) ((packet.size >> 0) & 0xff);
+
                 os.write(header);
 
                 // Payload
@@ -144,7 +145,7 @@ public class Tcp implements MirrorServerInterface {
             while (mIsRunning) {
                 SystemClock.sleep(500);
                 os.write(0);
-                Log.w(mTag, "sendPingLoop");
+                debugLog(mTag, "sendPingLoop");
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -180,7 +181,7 @@ public class Tcp implements MirrorServerInterface {
         try (InputStream is = socket.getInputStream()) {
             while (mIsRunning) {
                 byte[] header = new byte[4];
-                Log.i(mTag, "isRunning: " + mIsRunning);
+                debugLog(mTag, "isRunning: " + mIsRunning);
                 while (mIsRunning) {
                     int headerRemain = 4;
                     int headerOffset = 0;
@@ -212,7 +213,7 @@ public class Tcp implements MirrorServerInterface {
                         }
                         if (is.available() == 0 && !socket.isClosed() && socket.isConnected()) {
                             SystemClock.sleep(1);
-                            Log.i(mTag, "143");
+                            debugLog(mTag, "nextPacketSize: " + nextPacketSize);
                             continue;
                         }
                         int size = is.read(buffer, nextPacketOffset, nextPacketSize);
@@ -253,7 +254,7 @@ public class Tcp implements MirrorServerInterface {
     public void sendBuf(byte[] buf, int len) {
         // TODO: Better buf limit ?
         if (mPendingPacketQueue.size() >= 200) {
-            Log.w(mTag, "Buffer full, mPendingPacketQueue size: " + mPendingPacketQueue.size());
+            debugLog(mTag, "Buffer full, mPendingPacketQueue size: " + mPendingPacketQueue.size());
             return;
         }
         // TODO: need extra copy?
@@ -286,5 +287,15 @@ public class Tcp implements MirrorServerInterface {
     @Override
     public int packetQueueSize() {
         return mPendingPacketQueue.size();
+    }
+
+    private long lastLogTime = 0;
+    private void debugLog(String tag, String msg) {
+        long time = System.currentTimeMillis();
+        if (time - lastLogTime < 1000) {
+            return;
+        }
+        lastLogTime = time;
+        Log.i(tag, msg);
     }
 }

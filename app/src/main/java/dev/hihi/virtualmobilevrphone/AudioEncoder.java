@@ -20,7 +20,7 @@ public class AudioEncoder {
     private static final int CHANNEL_MASK = AudioFormat.CHANNEL_IN_STEREO;
     private final int BUFFER_SIZE = 2 * AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_MASK, ENCODING);
 
-    private boolean isRunning = false;
+    volatile private boolean isRunning = true;
     private CountDownLatch mCountDownLatch = new CountDownLatch(1);
 
     // TODO: Encode audio, do not just stream PCM directly
@@ -48,7 +48,6 @@ public class AudioEncoder {
 
                 try {
                     byte[] buffer = new byte[BUFFER_SIZE];
-                    isRunning = true;
 
                     audioRecord.startRecording();
                     while (isRunning) {

@@ -40,6 +40,7 @@ public class CommandService {
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     public void performGesture(float x, float y, int action) {
+        Log.i(TAG, "performGesture: " + x + ", " + y + ", " + action);
         boolean willContinue;
         Path clickPath = new Path();
         switch (action) {
