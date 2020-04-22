@@ -35,6 +35,8 @@ public class MirrorService extends AccessibilityService {
     private VideoEncoder mVideoEncoder;
     private CommandService mCommandService;
 
+    private NsdHelper mNsdHelper;
+
     // TODO: Fix it
     private static boolean sIsRunning = false;
 
@@ -72,6 +74,7 @@ public class MirrorService extends AccessibilityService {
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .build();
         startForeground(8964, notification);
+        mNsdHelper = new NsdHelper(getApplicationContext(), null);
     }
 
     @Override
@@ -110,6 +113,7 @@ public class MirrorService extends AccessibilityService {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startCommandService();
                 }
+                mNsdHelper.registerService(COMMAND_PORT);
                 break;
             case "stop":
                 sIsRunning = false;
@@ -137,6 +141,7 @@ public class MirrorService extends AccessibilityService {
                 if (commandServer != null) {
                     commandServer.stop();
                 }
+                mNsdHelper.tearDown();
                 break;
             default:
                 Log.e(TAG, "Unknown command: " + command);
