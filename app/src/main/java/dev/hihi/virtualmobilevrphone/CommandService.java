@@ -2,8 +2,11 @@ package dev.hihi.virtualmobilevrphone;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
+import android.annotation.SuppressLint;
+import android.content.Context;
 import android.graphics.Path;
 import android.os.Build;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.Log;
 
@@ -62,6 +65,9 @@ public class CommandService {
                 Log.e(TAG, "unknown action: " + action);
                 return;
 
+        }
+        if (action == GESTURE.ACTION_DOWN) {
+            wakeScreenIfNecessary();
         }
         if (mLastStrokeDescription == null) {
             mLastStrokeDescription = new GestureDescription.StrokeDescription(clickPath, 0, 1, willContinue);
@@ -126,6 +132,19 @@ public class CommandService {
                 }
             }
         }.start();
+    }
+
+    private void wakeScreenIfNecessary() {
+        PowerManager pm = (PowerManager) mAccessibilityService.getSystemService(Context.POWER_SERVICE);
+        if (pm.isInteractive()) {
+            return;
+        }
+        @SuppressLint("InvalidWakeLockTag")
+        PowerManager.WakeLock screenLock = ((PowerManager) mAccessibilityService.getSystemService(
+                Context.POWER_SERVICE)).newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "TAG");
+        screenLock.acquire();
+        screenLock.release();
     }
 
     public void stop() {
