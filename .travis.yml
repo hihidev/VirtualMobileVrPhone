@@ -1,12 +1,22 @@
 language: android
 jdk: oraclejdk8
 sudo: false
-
 android:
   components:
-    - platform-tools
-    - tools
-    - build-tools-29.0.3
-    - android-29
-
-script: ./gradlew clean build
+  - platform-tools
+  - tools
+  - build-tools-29.0.3
+  - android-29
+script:
+- "./gradlew clean build"
+- echo -e "\nandroid.useAndroidX=true" >> gradle.properties && ./gradlew assembleRelease
+deploy:
+  provider: releases
+  api_key:
+    secure: rIsCIFHEahPMRi99cBDvqbt9ZHPIV1LSyCBJIfS8JHwI7QA6rPC7dvGCRG0B6e8dA68nXsqLHQOeYFyzx0Pi59GFBU10ixxe93SO+9m0Z5cpqbBjZUKagGmZAa0Z99SVJVc/ONH1p5IiymEKpGHMR6hT6ZCM/f1+C2SCO64dBrkcSivavTftD6q6X1BU4jIO+39al89UxTur4dgCVUH9+Vh/ZrKfrgEq16gPIQo+ngRVq9B6orfjl6S9dcd487q/66m9xLYj019lLI8Is5KApwk8KYKm3GVId479ZtmLQva3v2vbxSOc7JdGbKL0gEbfa3UobDOCq8yjvwWxdXgxHt6VWZjJzkMerHg/C/tDNfTQ3NfpY7Lx2B8wt3wrEmAwXwuhyz/RARMfit0aaLdOUJ1s3KOcJK5yk7zo2iJIIIVjElnD6pGZIPiZvUlhDcv0hH7qzPSXaZkGT7VJbYqNWOc5WH3vAUGJkthZq2oeDzUJWcJm9XMZGg189h6ABFXKoKkV6U+7b6lcV2plYh6bQFAiext/EwOgGyjDmZjgMhgKbiXyct9uAO9DeOJpi+AxmaVTRfmKDIpeKq7vmvB6ZnbSegJwkdB28Y3SCzNcFVL2plvcymYX5XO9t6lD5kfQIh7CgsPSuY0AKt0uV+J0LNEsgHuFMglwfrWXvojxuTQ=
+  file: app/build/outputs/apk/release/app-release.apk
+  on:
+    repo: hihidev/VirtualMobileVrPhone
+before_install:
+- openssl aes-256-cbc -K $encrypted_7c0b538a9501_key -iv $encrypted_7c0b538a9501_iv
+  -in release.keystore.enc -out app/release.keystore -d

@@ -14,13 +14,24 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    buildTypes {
+    signingConfigs {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            try {
+                storeFile file("release.keystore")
+                storePassword KEYSTORE_PASSWORD
+                keyAlias "release"
+                keyPassword KEY_PASSWORD
+            } catch (ex) {
+                throw new Exception("You should define KEYSTORE_PASSWORD and KEY_PASSWORD in gradle.properties.", ex)
+            }
         }
     }
 
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+        }
+    }
 }
 
 dependencies {
