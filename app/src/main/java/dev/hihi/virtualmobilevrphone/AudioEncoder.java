@@ -19,6 +19,8 @@ public class AudioEncoder {
     private static final int ENCODING = AudioFormat.ENCODING_PCM_16BIT;
     private static final int CHANNEL_MASK = AudioFormat.CHANNEL_IN_STEREO;
     private final int BUFFER_SIZE = 2 * AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_MASK, ENCODING);
+    // TODO: Can be further reduce to fit packet buffer size: bytesPerFrame * sampleRate * NUM_OF_FRAMES
+    private final int READ_BUFFER_SIZE = BUFFER_SIZE / 2;
 
     volatile private boolean isRunning = true;
     private CountDownLatch mCountDownLatch = new CountDownLatch(1);
@@ -47,7 +49,7 @@ public class AudioEncoder {
                         .build();
 
                 try {
-                    byte[] buffer = new byte[BUFFER_SIZE];
+                    byte[] buffer = new byte[READ_BUFFER_SIZE];
 
                     audioRecord.startRecording();
                     while (isRunning) {
